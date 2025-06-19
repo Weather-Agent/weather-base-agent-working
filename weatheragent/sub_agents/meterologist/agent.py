@@ -446,7 +446,7 @@ def get_current_time(city: str) -> dict:
         }
 
 
-root_agent = Agent(
+meterologist = Agent(
     name="meterologist",
     model="gemini-2.5-flash-lite-preview-06-17",
     description=(
