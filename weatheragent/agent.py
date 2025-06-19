@@ -4,6 +4,7 @@ from google.adk.tools.agent_tool import AgentTool
 from .sub_agents.earthquake_agent.agent import earthquake_agent
 from .sub_agents.flood_agent.agent import flood_agent
 from .sub_agents.meterologist.agent import meterologist
+from .sub_agents.searcher.agent import searcher
 #from .sub_agents.stock_analyst.agent import stock_analyst
 from .tools.tools import get_current_time
 
@@ -21,11 +22,13 @@ root_agent = Agent(
     - earthquake_agent
     - flood_agent
     - meterologist
+     You also have access to the following tools:
+    - searcher: Use this tool to search for information on the web when you cannot answer a question directly. like getting the number of cities in a country, or the current weather in a city.
 
     """,
     sub_agents=[earthquake_agent, flood_agent,meterologist],
-    # tools=[
-    #     AgentTool(news_analyst),
+    tools=[
+        AgentTool(searcher),
     #     get_current_time,
-    # ],
+    ],
 )
