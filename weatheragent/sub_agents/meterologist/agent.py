@@ -148,11 +148,15 @@ def get_current_weather(city: str) -> dict:
         }
 
 
-def get_air_quality(city: str) -> dict:
+from typing import Optional
+
+def get_air_quality(city: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> dict:
     """Get air quality information for a city.
     
     Args:
         city (str): The name of the city.
+        start_date (str, optional): Start date in YYYY-MM-DD format. Defaults to today.
+        end_date (str, optional): End date in YYYY-MM-DD format. Defaults to tomorrow.
         
     Returns:
         dict: status and air quality data or error message.
@@ -162,8 +166,11 @@ def get_air_quality(city: str) -> dict:
         return coords
     
     try:
-        start_date = datetime.date.today().isoformat()
-        end_date = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+        # Use provided dates or defaults
+        if not start_date:
+            start_date = datetime.date.today().isoformat()
+        if not end_date:
+            end_date = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
         
         air_url = "https://air-quality-api.open-meteo.com/v1/air-quality"
         air_params = {
@@ -193,7 +200,8 @@ def get_air_quality(city: str) -> dict:
                 "ozone": f"{current.get('ozone', 'N/A')} µg/m³"
             },
             "time": current.get("time", ""),
-            "units": data.get("current_units", {})
+            "units": data.get("current_units", {}),
+            "period": f"{start_date} to {end_date}"
         }
     except Exception as e:
         return {
