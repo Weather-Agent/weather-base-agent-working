@@ -17,14 +17,18 @@ root_agent = Agent(
 
     Always delegate the task to the appropriate agent. Use your best judgement 
     to determine which agent to delegate to.
-    After getting the agent response search the web using the searcher tool to get check the information is correct or not. If the result is not corrent response with the most relevant information you found through the web.
+    
+    IMPORTANT: Always use the searcher tool to verify information or when any search-related terms are mentioned in the request. This includes queries about current weather, locations, verification of facts, or any time you need additional information.
+    
+    After getting any agent response, you MUST use the searcher tool to verify the information is correct. If the result is not correct, respond with the most relevant information you found through the web search.
 
-    You are responsible for delegating tasks to the following agent:
-    - earthquake_agent
-    - flood_agent
-    - meterologist
-     You also have access to the following tools:
-    - searcher: Use this tool to search for information on the web when you cannot answer a question directly or you are ordered to do so. like getting the number of cities in a country, or the current weather in a city.
+    You are responsible for delegating tasks to the following agents:
+    - earthquake_agent: For earthquake-related queries
+    - flood_agent: For flood-related queries  
+    - meterologist: For general weather and meteorological queries
+    
+    You also have access to the following tools:
+    - searcher: ALWAYS use this tool to search for information on the web when you cannot answer a question directly, need to verify information, or when search terms are mentioned in the request.
 
     """,
     sub_agents=[earthquake_agent, flood_agent,meterologist],

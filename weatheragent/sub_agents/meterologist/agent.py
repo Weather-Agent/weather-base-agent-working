@@ -4,36 +4,89 @@ from zoneinfo import ZoneInfo
 from google.adk.agents import Agent
 
 def get_city_coordinates(city: str) -> dict:
-    """Get latitude and longitude for a city using Open-Meteo Geocoding API.
+    """Get latitude and longitude for a city or country using Open-Meteo Geocoding API.
     
     Args:
-        city (str): The name of the city.
+        city (str): The name of the city or country.
         
     Returns:
         dict: status and coordinates or error message.
     """
     try:
         geocoding_url = "https://geocoding-api.open-meteo.com/v1/search"
-        geocoding_params = {"name": city, "count": 1}
+        
+        # First try: Search for the exact input (city or country)
+        geocoding_params = {"name": city, "count": 5}  # Get more results to find best match
         response = requests.get(geocoding_url, params=geocoding_params)
         response.raise_for_status()
         data = response.json()
         
         if data.get("results"):
-            result = data["results"][0]
+            # Prioritize exact matches or capital cities for countries
+            results = data["results"]
+            
+            # Look for exact name match first
+            for result in results:
+                if result["name"].lower() == city.lower():
+                    return {
+                        "status": "success",
+                        "latitude": result["latitude"],
+                        "longitude": result["longitude"],
+                        "name": result["name"],
+                        "country": result.get("country", ""),
+                        "timezone": result.get("timezone", "auto"),
+                        "type": "exact_match"
+                    }
+            
+            # Look for country match (where the input matches the country name)
+            for result in results:
+                if result.get("country", "").lower() == city.lower():
+                    # This is likely a country search, return the capital or major city
+                    return {
+                        "status": "success",
+                        "latitude": result["latitude"],
+                        "longitude": result["longitude"],
+                        "name": result["name"],
+                        "country": result.get("country", ""),
+                        "timezone": result.get("timezone", "auto"),
+                        "type": "country_capital"
+                    }
+            
+            # If no exact match, return the first result
+            result = results[0]
             return {
                 "status": "success",
                 "latitude": result["latitude"],
                 "longitude": result["longitude"],
                 "name": result["name"],
                 "country": result.get("country", ""),
-                "timezone": result.get("timezone", "auto")
+                "timezone": result.get("timezone", "auto"),
+                "type": "best_match"
             }
         else:
-            return {
-                "status": "error",
-                "error_message": f"City '{city}' not found."
-            }
+            # Second try: If no results found, try searching with "capital" appended
+            capital_search = f"{city} capital"
+            geocoding_params = {"name": capital_search, "count": 3}
+            response = requests.get(geocoding_url, params=geocoding_params)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("results"):
+                result = data["results"][0]
+                return {
+                    "status": "success",
+                    "latitude": result["latitude"],
+                    "longitude": result["longitude"],
+                    "name": result["name"],
+                    "country": result.get("country", ""),
+                    "timezone": result.get("timezone", "auto"),
+                    "type": "capital_search"
+                }
+            else:
+                return {
+                    "status": "error",
+                    "error_message": f"Location '{city}' not found. Please try with a specific city name or country."
+                }
     except Exception as e:
         return {
             "status": "error",
@@ -42,11 +95,11 @@ def get_city_coordinates(city: str) -> dict:
 
 
 def get_weather_forecast(city: str, days: int = 3) -> dict:
-    """Get detailed weather forecast for a city.
+    """Get detailed weather forecast for a city or country.
     
     Args:
-        city (str): The name of the city.
-        days (int): Number of days to forecast (default: 3).
+        city (str): The name of the city or country.
+        days (int): Number of days to forecast (default: 3) (max 16 days).
         
     Returns:
         dict: status and weather forecast or error message.
@@ -86,10 +139,21 @@ def get_weather_forecast(city: str, days: int = 3) -> dict:
                     "max_wind_speed": f"{data['daily']['wind_speed_10m_max'][i]}km/h"
                 })
         
+        # Determine location description based on coordinate type
+        location_type = coords.get("type", "unknown")
+        location_description = coords["name"]
+        if location_type == "country_capital":
+            location_description = f"{coords['name']} (capital of {coords['country']})"
+        elif location_type == "capital_search":
+            location_description = f"{coords['name']} ({coords['country']})"
+        
         return {
             "status": "success",
+            "location": location_description,
             "city": coords["name"],
             "country": coords["country"],
+            "location_type": location_type,
+            "coordinates": {"latitude": coords["latitude"], "longitude": coords["longitude"]},
             "forecast": daily_forecast,
             "units": data.get("daily_units", {})
         }
@@ -101,10 +165,10 @@ def get_weather_forecast(city: str, days: int = 3) -> dict:
 
 
 def get_current_weather(city: str) -> dict:
-    """Get current weather conditions for a city.
+    """Get current weather conditions for a city or country.
     
     Args:
-        city (str): The name of the city.
+        city (str): The name of the city or country.
         
     Returns:
         dict: status and current weather or error message.
@@ -128,10 +192,21 @@ def get_current_weather(city: str) -> dict:
         
         current = data.get("current", {})
         
+        # Determine location description based on coordinate type
+        location_type = coords.get("type", "unknown")
+        location_description = coords["name"]
+        if location_type == "country_capital":
+            location_description = f"{coords['name']} (capital of {coords['country']})"
+        elif location_type == "capital_search":
+            location_description = f"{coords['name']} ({coords['country']})"
+        
         return {
             "status": "success",
+            "location": location_description,
             "city": coords["name"],
             "country": coords["country"],
+            "location_type": location_type,
+            "coordinates": {"latitude": coords["latitude"], "longitude": coords["longitude"]},
             "current_weather": {
                 "temperature": f"{current.get('temperature_2m', 'N/A')}°C",
                 "humidity": f"{current.get('relative_humidity_2m', 'N/A')}%",
@@ -149,10 +224,10 @@ def get_current_weather(city: str) -> dict:
 
 
 def get_air_quality(city: str) -> dict:
-    """Get air quality information for a city.
+    """Get air quality information for a city or country.
     
     Args:
-        city (str): The name of the city.
+        city (str): The name of the city or country.
         
     Returns:
         dict: status and air quality data or error message.
@@ -181,10 +256,21 @@ def get_air_quality(city: str) -> dict:
         
         current = data.get("current", {})
         
+        # Determine location description based on coordinate type
+        location_type = coords.get("type", "unknown")
+        location_description = coords["name"]
+        if location_type == "country_capital":
+            location_description = f"{coords['name']} (capital of {coords['country']})"
+        elif location_type == "capital_search":
+            location_description = f"{coords['name']} ({coords['country']})"
+        
         return {
             "status": "success",
+            "location": location_description,
             "city": coords["name"],
             "country": coords["country"],
+            "location_type": location_type,
+            "coordinates": {"latitude": coords["latitude"], "longitude": coords["longitude"]},
             "air_quality": {
                 "pm10": f"{current.get('pm10', 'N/A')} µg/m³",
                 "pm2_5": f"{current.get('pm2_5', 'N/A')} µg/m³",
@@ -203,10 +289,10 @@ def get_air_quality(city: str) -> dict:
 
 
 def get_marine_weather(city: str) -> dict:
-    """Get marine weather conditions for coastal cities.
+    """Get marine weather conditions for coastal cities or countries.
     
     Args:
-        city (str): The name of the coastal city.
+        city (str): The name of the coastal city or country.
         
     Returns:
         dict: status and marine weather data or error message.
@@ -246,10 +332,21 @@ def get_marine_weather(city: str) -> dict:
                     "max_wave_period": f"{data['daily']['wave_period_max'][i]}s"
                 })
         
+        # Determine location description based on coordinate type
+        location_type = coords.get("type", "unknown")
+        location_description = coords["name"]
+        if location_type == "country_capital":
+            location_description = f"{coords['name']} (capital of {coords['country']})"
+        elif location_type == "capital_search":
+            location_description = f"{coords['name']} ({coords['country']})"
+        
         return {
             "status": "success",
+            "location": location_description,
             "city": coords["name"],
             "country": coords["country"],
+            "location_type": location_type,
+            "coordinates": {"latitude": coords["latitude"], "longitude": coords["longitude"]},
             "current_marine": {
                 "wave_height": f"{current.get('wave_height', 'N/A')}m",
                 "wave_direction": f"{current.get('wave_direction', 'N/A')}°",
@@ -266,10 +363,10 @@ def get_marine_weather(city: str) -> dict:
 
 
 def get_historical_weather(city: str, start_date: str, end_date: str) -> dict:
-    """Get historical weather data for a city.
+    """Get historical weather data for a city or country.
     
     Args:
-        city (str): The name of the city.
+        city (str): The name of the city or country.
         start_date (str): Start date in YYYY-MM-DD format.
         end_date (str): End date in YYYY-MM-DD format.
         
@@ -305,10 +402,21 @@ def get_historical_weather(city: str, start_date: str, end_date: str) -> dict:
                     "precipitation": f"{data['daily']['precipitation_sum'][i]}mm"
                 })
         
+        # Determine location description based on coordinate type
+        location_type = coords.get("type", "unknown")
+        location_description = coords["name"]
+        if location_type == "country_capital":
+            location_description = f"{coords['name']} (capital of {coords['country']})"
+        elif location_type == "capital_search":
+            location_description = f"{coords['name']} ({coords['country']})"
+        
         return {
             "status": "success",
+            "location": location_description,
             "city": coords["name"],
             "country": coords["country"],
+            "location_type": location_type,
+            "coordinates": {"latitude": coords["latitude"], "longitude": coords["longitude"]},
             "period": f"{start_date} to {end_date}",
             "historical_data": daily_data,
             "units": data.get("daily_units", {})
@@ -321,10 +429,10 @@ def get_historical_weather(city: str, start_date: str, end_date: str) -> dict:
 
 
 def get_climate_forecast(city: str, year: int = 2040) -> dict:
-    """Get long-term climate forecast for a city.
+    """Get long-term climate forecast for a city or country.
     
     Args:
-        city (str): The name of the city.
+        city (str): The name of the city or country.
         year (int): Target year for climate forecast (default: 2040).
         
     Returns:
@@ -372,10 +480,21 @@ def get_climate_forecast(city: str, year: int = 2040) -> dict:
                 "total_precipitation": f"{sum(values['precip']):.1f}mm"
             })
         
+        # Determine location description based on coordinate type
+        location_type = coords.get("type", "unknown")
+        location_description = coords["name"]
+        if location_type == "country_capital":
+            location_description = f"{coords['name']} (capital of {coords['country']})"
+        elif location_type == "capital_search":
+            location_description = f"{coords['name']} ({coords['country']})"
+        
         return {
             "status": "success",
+            "location": location_description,
             "city": coords["name"],
             "country": coords["country"],
+            "location_type": location_type,
+            "coordinates": {"latitude": coords["latitude"], "longitude": coords["longitude"]},
             "forecast_year": year,
             "monthly_climate": monthly_summary,
             "model": "EC-Earth3"
@@ -388,10 +507,10 @@ def get_climate_forecast(city: str, year: int = 2040) -> dict:
 
 
 def get_weather(city: str) -> dict:
-    """Retrieves the current weather report for a specified city.
+    """Retrieves the current weather report for a specified city or country.
 
     Args:
-        city (str): The name of the city for which to retrieve the weather report.
+        city (str): The name of the city or country for which to retrieve the weather report.
 
     Returns:
         dict: status and result or error msg.
@@ -400,10 +519,10 @@ def get_weather(city: str) -> dict:
 
 
 def get_current_time(city: str) -> dict:
-    """Returns the current time in a specified city.
+    """Returns the current time in a specified city or country.
 
     Args:
-        city (str): The name of the city for which to retrieve the current time.
+        city (str): The name of the city or country for which to retrieve the current time.
 
     Returns:
         dict: status and result or error msg.
@@ -435,10 +554,30 @@ def get_current_time(city: str) -> dict:
         
         tz = ZoneInfo(tz_identifier)
         now = datetime.datetime.now(tz)
+        
+        # Determine location description based on coordinate type
+        location_type = coords.get("type", "unknown")
+        location_description = coords["name"]
+        if location_type == "country_capital":
+            location_description = f"{coords['name']} (capital of {coords['country']})"
+        elif location_type == "capital_search":
+            location_description = f"{coords['name']} ({coords['country']})"
+        
         report = (
-            f'The current time in {coords["name"]} is {now.strftime("%Y-%m-%d %H:%M:%S %Z%z")}'
+            f'The current time in {location_description} is {now.strftime("%Y-%m-%d %H:%M:%S %Z%z")}'
         )
-        return {"status": "success", "report": report}
+        
+        return {
+            "status": "success", 
+            "report": report,
+            "location": location_description,
+            "city": coords["name"],
+            "country": coords["country"],
+            "location_type": location_type,
+            "coordinates": {"latitude": coords["latitude"], "longitude": coords["longitude"]},
+            "timezone": tz_identifier,
+            "current_time": now.strftime("%Y-%m-%d %H:%M:%S %Z%z")
+        }
     except Exception as e:
         return {
             "status": "error",
@@ -451,13 +590,18 @@ meterologist = Agent(
     model="gemini-2.5-flash-lite-preview-06-17",
     description=(
         "Advanced weather agent that provides comprehensive meteorological information including "
-        "current weather, forecasts, historical data, air quality, marine conditions, and climate projections."
+        "current weather, forecasts, historical data, air quality, marine conditions, and climate projections "
+        "for both cities and countries worldwide. Intelligently handles country queries by using capital cities "
+        "or major population centers as reference points."
     ),
     instruction=(
-        "You are a comprehensive meteorologist agent that can provide detailed weather information for any city worldwide. "
-        "You can get current weather conditions, multi-day forecasts, historical weather data, air quality information, "
-        "marine weather for coastal areas, and long-term climate forecasts. Always provide accurate, detailed, and "
-        "helpful weather information based on real-time data from Open-Meteo APIs. You should calculate the data when ever it is needed."
+        "You are a comprehensive meteorologist agent that can provide detailed weather information for any city or country worldwide. "
+        "When a user asks for weather information about a country, you will automatically find the most appropriate location "
+        "(usually the capital city) to provide representative data for that country. You can get current weather conditions, "
+        "multi-day forecasts, historical weather data, air quality information, marine weather for coastal areas, and "
+        "long-term climate forecasts. Always provide accurate, detailed, and helpful weather information based on real-time "
+        "data from Open-Meteo APIs. Clearly indicate whether you're providing data for a specific city or a representative "
+        "location within a country. You should calculate and analyze the data whenever it is needed to provide meaningful insights."
     ),
     tools=[
         get_weather,
