@@ -1,6 +1,7 @@
 import datetime
 import requests
 import re
+from typing import Optional
 from zoneinfo import ZoneInfo
 from google.adk.agents import Agent
 
@@ -481,7 +482,7 @@ def get_marine_weather(city: str) -> dict:
         }
 
 
-def get_historical_weather(city: str, start_date: str = None, end_date: str = None, variables: str = "basic", time_period: str = None) -> dict:
+def get_historical_weather(city: str, start_date: Optional[str] = None, end_date: Optional[str] = None, variables: str = "basic", time_period: Optional[str] = None) -> dict:
     """Get historical weather data for a city or country with comprehensive variable options.
     
     Args:
@@ -1019,7 +1020,7 @@ def get_climate_forecast(city: str, year: int = 2040) -> dict:
         }
 
 
-def get_weather(city: str, query: str = None) -> dict:
+def get_weather(city: str, query: Optional[str] = None) -> dict:
     """Retrieves weather information for a specified city or country.
     
     This function intelligently determines whether to get current weather or historical weather
